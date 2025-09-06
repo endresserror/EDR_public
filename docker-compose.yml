@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  edr-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: iot-edr-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/iot_edr.db
+      - NETWORK_INTERFACE=eth0
+      - WEB_DASHBOARD_HOST=0.0.0.0
+      - WEB_DASHBOARD_PORT=8000
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/logs:/app/logs
+      - ./backend/config:/app/config
+    networks:
+      - edr-network
+    restart: unless-stopped
+    privileged: true  # Required for network packet capture
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - edr-database
+
+  edr-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: iot-edr-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - edr-backend
+    networks:
+      - edr-network
+    restart: unless-stopped
+
+  edr-database:
+    image: postgres:15-alpine
+    container_name: iot-edr-database
+    environment:
+      - POSTGRES_DB=iot_edr
+      - POSTGRES_USER=edr_user
+      - POSTGRES_PASSWORD=edr_password
+    volumes:
+      - edr_db_data:/var/lib/postgresql/data
+    networks:
+      - edr-network
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+
+  edr-redis:
+    image: redis:7-alpine
+    container_name: iot-edr-redis
+    volumes:
+      - edr_redis_data:/data
+    networks:
+      - edr-network
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+networks:
+  edr-network:
+    driver: bridge
+
+volumes:
+  edr_db_data:
+  edr_redis_data:
